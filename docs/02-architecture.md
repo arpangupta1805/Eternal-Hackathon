@@ -57,6 +57,7 @@ There is **one Android app**. Every install can originate orders, relay packets,
     orders.js             order processing (validation, ACK creation)
     stock.js              STOCK packet creation
     events.js             WebSocket broadcast to dashboard
+    admin.js              admin API routes, dashboard state and metrics
   public/                 dashboard (index.html, app.js, style.css)
   scripts/
     fake-device.js        CLI that enrolls, seals and uploads an order (for testing without a phone)

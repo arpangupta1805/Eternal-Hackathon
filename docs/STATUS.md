@@ -2,15 +2,15 @@
 
 Update this file at the end of every work session. Anyone (human or AI tool) resuming work reads this first.
 
-**Last updated:** 2026-11-12, M1 backend core done.
+**Last updated:** 2026-11-12, M2 dashboard done (one visual check outstanding, see Known issues).
 
-**Current focus:** M2 dashboard.
+**Current focus:** M3 app without mesh (self-relay path).
 
 ## Milestones
 
 - [x] M0. Scaffold (one check outstanding: install the APK on a real phone, see Known issues)
 - [x] M1. Backend core
-- [ ] M2. Dashboard
+- [x] M2. Dashboard (not yet looked at in a real browser, see Known issues)
 - [ ] M3. App without mesh (self-relay path)
 - [ ] M4. Mesh routing logic (JVM tests)
 - [ ] M5. Real transport (Nearby)
@@ -30,6 +30,13 @@ Update this file at the end of every work session. Anyone (human or AI tool) res
 - Against a real running server, `scripts/fake-device.js`: `enroll` works; `order` prints a verified, decrypted ACK (3-hop trace stored as `hops = 3`); `--tamper` gets no ACK and a `TAMPERED` log row; `--twice` gets the identical ACK and a `DUPLICATE` log row; `--expired` gets `REJECTED / EXPIRED`.
 - `npm run reset` on that server: device kept, `stock_seq` and `catalog_version` went up, the same device ordered again and got `EL-000003` (counter not restarted).
 
+## What M2 verified
+
+- `npm test`: 38 tests pass (31 from M1 plus 7 for the admin API and WebSocket).
+- Tests cover both acceptance criteria: an uploaded order is pushed over `WS /admin/ws` with its role-labelled trace, and an admin stock toggle changes `GET /v1/mesh/stock` (seq up, item listed) and turns the next order into `CONFIRMED_MODIFIED` with a substitution.
+- The same was run by hand against a live server with `fake-device.js`: 4 enrolled devices (Customer, Rider, Store, gateway), a 3-hop order, a stock toggle, a substituted order, a tampered packet and a rejected order. `/admin/api/state` reported the expected metrics.
+- **Not verified:** how the page looks and behaves in a browser. Headless Brave would not produce a screenshot in the build sandbox. The page is served (HTTP 200) and `app.js` passes a syntax check, but nobody has looked at it yet.
+
 ## How to run the backend
 
 ```
@@ -39,6 +46,14 @@ npm run dev                                   # http://localhost:8080
 npm test
 node scripts/fake-device.js enroll
 node scripts/fake-device.js order --item itm_milk_500:2 --item itm_bread_brown:1:SUBSTITUTE:itm_bread_white
+```
+
+Dashboard: open `http://localhost:8080/`. To see a labelled multi-hop path without phones, enroll extra fake devices with their own state files and pass their node ids to `--trace`:
+
+```
+node scripts/fake-device.js enroll --role RIDER --state data/rider.json
+node scripts/fake-device.js enroll --role STORE --state data/store.json
+node scripts/fake-device.js order --item itm_milk_500:2 --trace <rider node_id>,<store node_id>
 ```
 
 ## In progress / half-done
@@ -79,6 +94,12 @@ Record any choice not covered by the docs, with one line of reasoning.
 - The server does not check that `total_seen` matches the body's own arithmetic or that `expires_at - created_at` is 20 minutes. It computes its own total and trusts the signed `expires_at`, as the docs say.
 - Each line of `items` is evaluated on its own; the same `item_id` appearing twice is not merged.
 - `GET /v1/catalog` lists stores in `store_id` order and items in seed order.
+- One more file beyond the layout: `src/admin.js` (admin routes, dashboard state, metrics). Added to the layout doc. `ws` version 8.22.2.
+- Admin endpoints answer with the full dashboard state and push the same as a `catalog` event, so the page never has to merge partial updates. Shapes are written into `04-backend.md`.
+- "Orders confirmed" on the dashboard counts orders by status. "Success rate" is orders that reached the server (any answer, including rejected) divided by the attempted count the operator types in; that count is stored in the browser's localStorage.
+- "Tampered packets accepted" is a constant 0, true by construction (an order is stored only after its signature verifies). It is not a measured counter.
+- Hop path marks are letters by position (A, B, C, D, then S for the server), with the role label and node id under each. A node id the server never enrolled shows as "Unknown phone".
+- The dashboard uses system fonts only, so it does not depend on a font CDN during the demo.
 - API errors use `error` codes `invalid_request` (400), `not_found` (404), `too_large` (413), `internal` (500).
 
 ## Deviations from the docs
@@ -90,4 +111,5 @@ Record anything built differently from the docs, and update the doc itself too.
 ## Known issues
 
 - M0 acceptance says "the empty app installs on a phone". Only the build is verified. To finish the check: enable USB debugging, plug a phone in, run `cd android && ./gradlew installDebug`.
+- The dashboard has not been viewed in a browser yet. Run `npm run dev`, open `http://localhost:8080/`, place a few fake-device orders, and check layout, the hop-chain animation on a new order, the stock switches and price fields, and readability from a distance.
 - Android Studio is not installed on the dev machine. Builds work from the command line with `./gradlew`.

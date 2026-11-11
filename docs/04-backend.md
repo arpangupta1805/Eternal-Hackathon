@@ -199,6 +199,20 @@ Stock is boolean only. Accepting an order does not change stock.
 | `POST /admin/api/reset` | Clears orders and logs, re-seeds catalog. Keeps devices and keys. Bumps every `stock_seq` and `catalog_version` instead of resetting them (same as `npm run reset`). |
 | `WS /admin/ws` | Server pushes `{ "event": "order" | "catalog" | "packet", "data": ... }` |
 
+Every catalog-changing endpoint and `reset` answer with the full state (same shape as `GET /admin/api/state`) and push it as a `catalog` event.
+
+Event data:
+
+- `order`: `{ "order": <order summary>, "metrics": <metrics> }`, sent once per newly stored order.
+- `packet`: `{ "received_at", "packet_key", "gateway_node_id", "outcome", "metrics" }`, sent for every packet log row.
+- `catalog`: the full state.
+
+State: `{ server_time, catalog_version, stores (as in GET /v1/catalog), orders (newest first, at most 50), metrics }`.
+
+Order summary: `order_id`, `server_order_ref`, `store_id`, `store_name`, `status`, `reason`, `final_total`, `total_seen`, `delivery_fee`, `eta_minutes`, `requested_items`, `final_items`, `changes`, `created_at`, `received_at`, `latency_ms`, `hops`, `trace` (array of `{ node_id, role }`, `role` is `null` for a node the server has never enrolled), `gateway_node_id`.
+
+Metrics: `orders_received` (distinct orders answered), `orders_confirmed` (includes modified), `orders_modified`, `orders_rejected`, `duplicates_dropped`, `tampered_rejected`, `tampered_accepted`, `malformed`, `avg_hops`, `avg_latency_ms`, `median_latency_ms`. Order counts come from the `orders` table by status; duplicate, tampered and malformed counts come from `packet_log`. `tampered_accepted` is 0 by construction: an order is stored only after its device signature verifies.
+
 ## Dashboard
 
 One page at `/`, served from `backend/public/`. Vanilla HTML, CSS, JS. It is projected during the demo, so it must be readable from a distance.
@@ -206,7 +220,7 @@ One page at `/`, served from `backend/public/`. Vanilla HTML, CSS, JS. It is pro
 - **Live orders.** Newest first. Each row: order ref, store, status with colour, final total, and the **hop path drawn as a chain** (`a1b2c3d4 → e5f6... (Rider) → ... (Store node) → ... → Server`) with hop count and latency. Role labels come from the `devices` table by `node_id`. New orders animate in.
 - **Order detail.** Items, changes made (dropped, substituted, price changed), reject reason.
 - **Catalog control.** Every item with an in-stock toggle and editable price. Store open/closed toggle.
-- **Metrics.** Orders accepted, duplicates dropped, tampered packets rejected, tampered packets accepted (always 0), average hops, average and median latency, success rate if the operator enters the number of orders attempted.
+- **Metrics.** Orders accepted, duplicates dropped, tampered packets rejected, tampered packets accepted (always 0), average hops, average and median latency, success rate if the operator enters the number of orders attempted (`orders_received` divided by that number; the number is kept in the browser only).
 
 ## Test tool: `scripts/fake-device.js`
 

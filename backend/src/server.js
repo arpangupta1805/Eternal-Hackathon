@@ -3,13 +3,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 
+import { createAdminRouter } from './admin.js';
 import { ROLES } from './constants.js';
 import { PUBLIC_KEY_BYTES, b64decode, b64encode, initCrypto, loadOrCreateServerKeys } from './crypto.js';
 import { getCatalog, openDb } from './db.js';
-import { createEvents } from './events.js';
+import { attachWebSocket, createEvents } from './events.js';
 import { createOrderProcessor } from './orders.js';
 import { createStockService } from './stock.js';
 
+const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 export const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 
 /**
@@ -92,6 +94,11 @@ export function createApp(ctx) {
     res.json({ packets: ctx.stock.latestPackets() });
   });
 
+  app.use('/admin/api', createAdminRouter(ctx));
+
+  // Dashboard (static page at /).
+  app.use(express.static(PUBLIC_DIR));
+
   app.use((req, res) => {
     res.status(404).json({ error: 'not_found', message: `No route for ${req.method} ${req.path}` });
   });
@@ -114,7 +121,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT) || 8080;
   const ctx = await createContext({ dataDir: DATA_DIR });
   ctx.stock.latestPackets(); // create the first STOCK packets at startup
-  createApp(ctx).listen(port, () => {
+  const server = createApp(ctx).listen(port, () => {
     console.log(`Eternal Lite backend listening on http://localhost:${port}`);
+    console.log(`Dashboard: http://localhost:${port}/`);
   });
+  attachWebSocket(server, ctx);
 }
