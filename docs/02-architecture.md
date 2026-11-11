@@ -51,6 +51,7 @@ There is **one Android app**. Every install can originate orders, relay packets,
   package.json
   src/
     server.js             Express app, routes
+    constants.js          protocol constants from 03-protocol.md
     db.js                 SQLite setup, schema, seed
     crypto.js             libsodium helpers, server keys
     orders.js             order processing (validation, ACK creation)
@@ -59,6 +60,8 @@ There is **one Android app**. Every install can originate orders, relay packets,
   public/                 dashboard (index.html, app.js, style.css)
   scripts/
     fake-device.js        CLI that enrolls, seals and uploads an order (for testing without a phone)
+    device-lib.js         the phone's side of the protocol in JS; used by fake-device.js and the tests
+    reset.js              npm run reset
   test/
   data/                   SQLite file and server keys (git-ignored)
 /android/                 Android Studio project
@@ -105,7 +108,7 @@ If the originator itself gets internet at any point, step 5 happens directly fro
 - minSdk 26. Manual dependency wiring (no DI framework needed).
 
 **Backend**
-- Node.js 20 or newer, ES modules
+- Node.js 22 or newer (required by `better-sqlite3` 13), ES modules
 - Express, `better-sqlite3`, `libsodium-wrappers`, `ws`
 - Node's built-in test runner
 

@@ -176,7 +176,7 @@ Any node can verify the server signature and read `order_id`, so any node can sa
 |---|---|
 | `CONFIRMED` | Accepted exactly as sent, at the same total. |
 | `CONFIRMED_MODIFIED` | Accepted with changes allowed by the customer's rules. `changes` lists them. |
-| `REJECTED` | Not accepted. `reason` says why. `final_items` is empty, `final_total` is 0. |
+| `REJECTED` | Not accepted. `reason` says why. `final_items` and `changes` are empty, `final_total` and `delivery_fee` are 0, `server_order_ref` and `eta_minutes` are `null`. |
 
 `reason` values: `EXPIRED`, `STORE_CLOSED`, `ITEM_UNAVAILABLE`, `PRICE_EXCEEDED`.
 

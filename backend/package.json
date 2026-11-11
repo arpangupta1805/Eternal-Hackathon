@@ -10,9 +10,13 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "reset": "node scripts/reset.js",
+    "fake-device": "node scripts/fake-device.js"
   },
   "dependencies": {
-    "express": "^5.3.0"
+    "better-sqlite3": "^13.1.1",
+    "express": "^5.3.0",
+    "libsodium-wrappers": "^0.8.4"
   }
 }

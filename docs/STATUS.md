@@ -2,14 +2,14 @@
 
 Update this file at the end of every work session. Anyone (human or AI tool) resuming work reads this first.
 
-**Last updated:** 2026-11-12, M0 scaffold built. Docs revised for seven gaps found in review (see "Doc changes after review").
+**Last updated:** 2026-11-12, M1 backend core done.
 
-**Current focus:** M1 backend core.
+**Current focus:** M2 dashboard.
 
 ## Milestones
 
 - [x] M0. Scaffold (one check outstanding: install the APK on a real phone, see Known issues)
-- [ ] M1. Backend core
+- [x] M1. Backend core
 - [ ] M2. Dashboard
 - [ ] M3. App without mesh (self-relay path)
 - [ ] M4. Mesh routing logic (JVM tests)
@@ -23,6 +23,23 @@ Update this file at the end of every work session. Anyone (human or AI tool) res
 - `backend`: `npm test` passes (1 test), `GET /health` returns `{"ok":true,...}` from a running server.
 - `android`: `./gradlew assembleDebug` produces `app/build/outputs/apk/debug/app-debug.apk` (about 10.9 MB).
 - Not verified: installing that APK on a phone. No device was attached.
+
+## What M1 verified
+
+- `npm test`: 31 tests pass (every case listed in `04-backend.md` "Tests", plus forged ACK, wrong signer, id mismatch, clock-skew boundary, order refs).
+- Against a real running server, `scripts/fake-device.js`: `enroll` works; `order` prints a verified, decrypted ACK (3-hop trace stored as `hops = 3`); `--tamper` gets no ACK and a `TAMPERED` log row; `--twice` gets the identical ACK and a `DUPLICATE` log row; `--expired` gets `REJECTED / EXPIRED`.
+- `npm run reset` on that server: device kept, `stock_seq` and `catalog_version` went up, the same device ordered again and got `EL-000003` (counter not restarted).
+
+## How to run the backend
+
+```
+cd backend
+npm install
+npm run dev                                   # http://localhost:8080
+npm test
+node scripts/fake-device.js enroll
+node scripts/fake-device.js order --item itm_milk_500:2 --item itm_bread_brown:1:SUBSTITUTE:itm_bread_white
+```
 
 ## In progress / half-done
 
@@ -53,6 +70,16 @@ Record any choice not covered by the docs, with one line of reasoning.
 - No Java toolchain pin in Gradle: the build uses whatever JDK runs Gradle (JDK 21 here) and targets Java 17 bytecode. A pinned toolchain failed because JDK 17 is not installed.
 - Backend: Express 5.3.0. Other dependencies (`better-sqlite3`, `libsodium-wrappers`, `ws`) are added in M1 and M2 when first used.
 - App icon is the Android default for now.
+- **Node 22 or newer is required**, not 20: the current `better-sqlite3` (13.1.1) needs it. Docs updated. Dev machine has Node 23.7.
+- Backend versions: `better-sqlite3` 13.1.1, `libsodium-wrappers` 0.8.4, Express 5.3.0.
+- Two files beyond the layout in `02-architecture.md`: `src/constants.js` (protocol constants) and `scripts/device-lib.js` (device-side protocol code shared by `fake-device.js` and the tests). Added to the layout doc.
+- STOCK packets are built lazily on `GET /v1/mesh/stock` (when `stock_seq` changed or the packet is older than 10 minutes) and once at startup. Same result as "created whenever `stock_seq` changes", with no invalidation to get wrong, and it also picks up `npm run reset` done from another process.
+- A `REJECTED` AckResult has `server_order_ref` and `eta_minutes` null, `changes` empty, `delivery_fee` 0. Rejected orders do not consume an order ref. Written into `03-protocol.md`.
+- Packet log outcome `ACCEPTED` means "processed and answered", so rejected orders are logged `ACCEPTED` too. The dashboard metric "orders accepted" must count by order status, not by this log.
+- The server does not check that `total_seen` matches the body's own arithmetic or that `expires_at - created_at` is 20 minutes. It computes its own total and trusts the signed `expires_at`, as the docs say.
+- Each line of `items` is evaluated on its own; the same `item_id` appearing twice is not merged.
+- `GET /v1/catalog` lists stores in `store_id` order and items in seed order.
+- API errors use `error` codes `invalid_request` (400), `not_found` (404), `too_large` (413), `internal` (500).
 
 ## Deviations from the docs
 

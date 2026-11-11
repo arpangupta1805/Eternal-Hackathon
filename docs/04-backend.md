@@ -1,6 +1,6 @@
 # 04. Backend
 
-A mock Eternal order API plus a live dashboard. Node.js 20+, Express, `better-sqlite3`, `libsodium-wrappers`, `ws`. JavaScript ES modules. Packet formats and crypto are defined in `03-protocol.md`.
+A mock Eternal order API plus a live dashboard. Node.js 22+, Express, `better-sqlite3`, `libsodium-wrappers`, `ws`. JavaScript ES modules. Packet formats and crypto are defined in `03-protocol.md`.
 
 ## Running
 
@@ -162,7 +162,7 @@ STOCK packets are created (and cached) whenever a store's `stock_seq` changes, a
 
 For each `ORDER` envelope, in this exact order:
 
-1. **Shape check.** Envelope valid, `type` is `ORDER`. Otherwise log `MALFORMED`, skip.
+1. **Shape check.** Envelope valid (fields and types of the packet envelope, `v` is 1, size at most `MAX_PACKET_BYTES`), `type` is `ORDER`. Otherwise log `MALFORMED`, skip. Well-formed `ACK` and `STOCK` packets are skipped without a log entry.
 2. **Dedupe.** If `orders` has a row with `order_id = envelope.id`: log `DUPLICATE`, return its stored `ack_packet`. Stop.
 3. **Open.** `crypto_box_seal_open(payload, server_box keys)`. On failure: log `TAMPERED`, skip.
 4. **Split.** First 64 bytes are the signature, the rest is `order_body_bytes`. Parse the body as JSON to read `device_id`. On parse failure: log `MALFORMED`, skip.
@@ -182,7 +182,7 @@ For each `ORDER` envelope, in this exact order:
 12. **Status.** `CONFIRMED` if `changes` is empty and `final_total == body.total_seen`. Otherwise `CONFIRMED_MODIFIED`. Assign `server_order_ref` (`EL-` plus a zero-padded counter) and `eta_minutes` from the store.
 13. **Build the ACK** as defined in `03-protocol.md`, sealed to the device's `box_pk` and signed with the server key.
 14. **Persist** the order row and the ACK in one transaction. `order_id` is the primary key, so if two gateways upload at the same moment, the second insert fails and that request returns the stored ACK (first copy wins).
-15. Log `ACCEPTED`, broadcast an `order` event to the dashboard, return the ACK.
+15. Log `ACCEPTED` (this means "processed and answered", so it is also logged for a `REJECTED` result), broadcast an `order` event to the dashboard, return the ACK.
 
 `hops` = `envelope.trace.length - 1`. Latency shown on the dashboard = `received_at - body.created_at` (device clock, so approximate).
 
@@ -210,7 +210,16 @@ One page at `/`, served from `backend/public/`. Vanilla HTML, CSS, JS. It is pro
 
 ## Test tool: `scripts/fake-device.js`
 
-A CLI that acts as a phone, so the backend can be built and tested without the app:
+A CLI that acts as a phone, so the backend can be built and tested without the app. Its protocol code lives in `scripts/device-lib.js`, which is the byte-level reference for the Android app. State is saved in `data/fake-device.json`.
+
+```
+node scripts/fake-device.js enroll [--server URL] [--role CUSTOMER|RIDER|STORE]
+node scripts/fake-device.js order --item ITEM:QTY[:RULE[:SUBSTITUTE]] [--store ID] [--seen ITEM=PAISE]
+     [--tolerance PAISE] [--trace id,id] [--tamper] [--twice] [--expired]
+```
+
+`--trace` adds made-up relay node ids so a multi-hop path shows on the dashboard. `--seen` sets the price the device "saw", to test price changes.
+
 
 - `enroll`: generates keys and a random `node_id`, enrolls (role from a flag, default `CUSTOMER`), saves state to a local file
 - `order`: builds an `OrderBody` from flags, signs, seals, wraps, uploads, then verifies and opens the ACK and prints the result
