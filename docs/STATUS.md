@@ -2,16 +2,16 @@
 
 Update this file at the end of every work session. Anyone (human or AI tool) resuming work reads this first.
 
-**Last updated:** 2026-11-12, M2 dashboard done (one visual check outstanding, see Known issues).
+**Last updated:** 2026-11-12, M3 app code written and building. **It has never run on a phone or emulator.** See "M3: what is and is not verified".
 
-**Current focus:** M3 app without mesh (self-relay path).
+**Current focus:** test M3 on a real phone (steps below), fix what breaks, then M4 mesh routing logic.
 
 ## Milestones
 
 - [x] M0. Scaffold (one check outstanding: install the APK on a real phone, see Known issues)
 - [x] M1. Backend core
 - [x] M2. Dashboard (not yet looked at in a real browser, see Known issues)
-- [ ] M3. App without mesh (self-relay path)
+- [ ] M3. App without mesh (self-relay path): code complete, builds, crypto verified against the backend. Not ticked because its acceptance test needs a phone.
 - [ ] M4. Mesh routing logic (JVM tests)
 - [ ] M5. Real transport (Nearby)
 - [ ] M6. Stock through the mesh
@@ -37,6 +37,27 @@ Update this file at the end of every work session. Anyone (human or AI tool) res
 - The same was run by hand against a live server with `fake-device.js`: 4 enrolled devices (Customer, Rider, Store, gateway), a 3-hop order, a stock toggle, a substituted order, a tampered packet and a rejected order. `/admin/api/state` reported the expected metrics.
 - **Not verified:** how the page looks and behaves in a browser. Headless Brave would not produce a screenshot in the build sandbox. The page is served (HTTP 200) and `app.js` passes a syntax check, but nobody has looked at it yet.
 
+## M3: what is and is not verified
+
+Verified on the dev machine:
+
+- `./gradlew assembleDebug` builds a 15 MB APK. `lintDebug`: 0 errors. The APK contains `libsodium.so` and `libjnidispatch.so` for arm64, armv7, x86 and x86_64.
+- 16 JVM unit tests pass: `OrderBuilderTest` (4), `CryptoTest` (10), `BackendIntegrationTest` (2).
+- **Kotlin and Node agree on bytes.** `BackendIntegrationTest` uses the app's real `ApiClient`, `OrderBuilder`, `OrderSealer`, `SignatureVerifier` and `AckOpener` against a running backend: enroll, catalog, a sealed order is confirmed, the ACK signature verifies and the result decrypts, a second upload returns the identical ACK, a tampered copy gets no ACK.
+
+Not verified (no phone attached, no emulator installed):
+
+- Anything that only runs on Android: the screens, Room, key storage in the Android Keystore, libsodium loading on a device, connectivity detection, and the upload trigger when airplane mode is turned off.
+
+### How to run the M3 acceptance test
+
+1. Start the backend on the laptop: `cd backend && npm run dev`. Find the laptop's LAN IP. The phone must be on the same Wi-Fi, and that Wi-Fi must have working internet (Android only counts a network as online once it is validated).
+2. Plug the phone in with USB debugging on: `cd android && ./gradlew installDebug`.
+3. Open the app. Fill the form, set "Server address" to `http://<laptop ip>:8080`, tap "Set up this phone". Expect the store list.
+4. Online order: add items, open the cart, "Place order". Expect "Confirmed" within a second or two, and the order on the dashboard.
+5. Self-relay: turn airplane mode on. The strip turns red ("Lite mode"). Place an order: "Place order via relay", then status "Waiting for a relay or signal". Turn airplane mode off. Expect it to confirm by itself within seconds.
+6. If something crashes: `adb logcat -d | grep -E "AndroidRuntime|eternallite"` and send me the output.
+
 ## How to run the backend
 
 ```
@@ -58,7 +79,8 @@ node scripts/fake-device.js order --item itm_milk_500:2 --trace <rider node_id>,
 
 ## In progress / half-done
 
-(nothing)
+- M3 is missing two things from `05-android-app.md` that belong with later milestones: the notification when an ACK arrives (M5, with the foreground service and notification permission) and "N relays nearby" in the status strip (shows 0 until M5).
+- The Relay and Debug screens are M5 and M7. Until then the server address can only be set during onboarding; to change it, clear the app's data and set up again.
 
 ## Doc changes after review (approved by the user, 2026-11-12)
 
@@ -100,6 +122,18 @@ Record any choice not covered by the docs, with one line of reasoning.
 - "Tampered packets accepted" is a constant 0, true by construction (an order is stored only after its signature verifies). It is not a measured counter.
 - Hop path marks are letters by position (A, B, C, D, then S for the server), with the role label and node id under each. A node id the server never enrolled shows as "Unknown phone".
 - The dashboard uses system fonts only, so it does not depend on a font CDN during the demo.
+- App libraries: Room 2.8.4 with KSP 2.3.4, kotlinx-serialization-json 1.9.0, coroutines 1.10.2, OkHttp 4.12.0, navigation-compose 2.9.6, Lazysodium-android 5.2.0 with JNA 5.17.0. Versions chosen to match Kotlin 2.2.21; newer serialization and coroutines releases target newer Kotlin.
+- The server address is asked for on the onboarding form, because enrollment cannot happen without it. Default text is a placeholder LAN address.
+- The address form has no coordinates, so `address.lat` and `address.lng` are sent as `null`. Written into `03-protocol.md`.
+- No view models. Screens read Room flows straight from the repositories. Less code, and all state already lives in the database.
+- A cart holds items from one store. Adding from another store asks first, then empties the cart.
+- Placing an order is allowed with out-of-stock items in the cart (they are flagged in red). The demo needs this: the server applies the fallback rule.
+- "Replace with" and nothing picked is sent as `DROP`.
+- The uploader, expiry timer and retry probe run in an application-wide coroutine scope for now, not a foreground service. `MeshService` arrives in M5 with Nearby. Until then they stop if Android kills the app in the background; with the app open they work.
+- The retry probe is a bare `GET /v1/mesh/stock` that ignores the packets. M6 turns it into the real `StockPoller`.
+- Besides upload triggers on "became online" and "order placed", the 30-second expiry timer also kicks an upload round as a safety net.
+- If the server answers an upload of the user's own order with no ACK, the order is flagged and the status screen says the phone may need to be set up again (this happens if the backend database was deleted).
+- Room uses destructive migration: a schema change in a later milestone wipes local app data, and the phone must be set up again.
 - API errors use `error` codes `invalid_request` (400), `not_found` (404), `too_large` (413), `internal` (500).
 
 ## Deviations from the docs
@@ -111,5 +145,6 @@ Record anything built differently from the docs, and update the doc itself too.
 ## Known issues
 
 - M0 acceptance says "the empty app installs on a phone". Only the build is verified. To finish the check: enable USB debugging, plug a phone in, run `cd android && ./gradlew installDebug`.
+- **The Android app has never been run.** Treat the first install as a test, not a demo. Most likely trouble spots: libsodium or JNA failing to load on the device, and the Wi-Fi network not counting as "validated".
 - The dashboard has not been viewed in a browser yet. Run `npm run dev`, open `http://localhost:8080/`, place a few fake-device orders, and check layout, the hop-chain animation on a new order, the stock switches and price fields, and readability from a distance.
 - Android Studio is not installed on the dev machine. Builds work from the command line with `./gradlew`.

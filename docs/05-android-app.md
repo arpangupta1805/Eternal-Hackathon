@@ -11,7 +11,7 @@ One app, all roles. Kotlin, Jetpack Compose, minSdk 26. Package `com.eternallite
 | `mesh` | `MeshTransport` interface, `NearbyTransport`, `MeshRouter`, `PacketStore`, frame and packet models |
 | `net` | `ApiClient`, `ConnectivityMonitor`, `GatewayUploader`, `StockPoller` |
 | `service` | `MeshService` (foreground service that owns transport, router, uploader, poller) |
-| `ui` | Compose screens and view models |
+| `ui` | Compose screens. No view models: screens collect Room flows from the repositories through the app container. |
 | `debug` | Debug settings, tamper tool, metrics |
 
 ## Key design rule: router is pure Kotlin
@@ -72,7 +72,7 @@ For the demo, the app stays open on all phones. Aggressive background killing on
 ## Screens
 
 **1. Onboarding and enrollment** (needs internet once)
-Name, phone, address form. Role label picker (Customer, Rider, Store node). Permission requests. On submit: generate keys and `node_id`, enroll (sending `node_id` and the chosen role), download catalog. If offline, say clearly that first-time setup needs internet.
+Name, phone, address form (flat or building, area, landmark; no coordinates). Role label picker (Customer, Rider, Store node). Server address field (the same value is editable later in the debug screen). Permission requests (added in M5 with Nearby). On submit: generate keys and `node_id`, enroll (sending `node_id` and the chosen role), download catalog. If offline, say clearly that first-time setup needs internet.
 
 **2. Home**
 List of stores. A status bar at the top that is always visible on every screen:
@@ -119,7 +119,8 @@ Node ID, role, relay on/off switch (off = no Nearby advertising, discovery or pe
 
 ## Crypto on the device
 
-- Lazysodium for all operations in `03-protocol.md`.
+- Lazysodium for all operations in `03-protocol.md`. All calls go through one small interface (`crypto/Sodium.kt`), so the same sealing and ACK-opening code runs in JVM unit tests with desktop libsodium.
+- `BackendIntegrationTest` runs that code against a live backend: `ETERNAL_BACKEND_URL=http://localhost:8080 ./gradlew testDebugUnitTest`. It is skipped when the variable is not set.
 - Generate `device_sign` and `device_box` keypairs on first launch.
 - Store secret keys encrypted with an AES key from the Android Keystore.
 - Server public keys come from the enrollment response and are stored in settings.

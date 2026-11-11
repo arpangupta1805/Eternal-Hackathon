@@ -139,6 +139,7 @@ Rules:
 - `payment` is always `"COD"`.
 - `expires_at` = `created_at + ORDER_VALIDITY_MS`. The envelope's `expires_at` is set to the same value. The server trusts only the one inside the body.
 - The envelope's `id` must equal `order_id`.
+- `address.lat` and `address.lng` are `null` when the app has no coordinates (the enrollment form does not ask for them). `line2` and `landmark` may be empty strings.
 
 ## ACK payload
 
