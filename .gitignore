@@ -1,0 +1,22 @@
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Backend
+node_modules/
+backend/data/
+*.log
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+android/.kotlin/
+*.apk
+*.aab
+*.keystore
+*.jks
